@@ -1,5 +1,5 @@
 clc
-%clear all
+clear all
 
 %This script takes velocity and pressure data from a high resolution Aquadopp
 %mounted on a McLane profiler and produces profiles of dissipation rates.
@@ -22,7 +22,7 @@ fname = ['testing_pitch.mat']; %File name
 load([fpath '/' fname]); 
 
 %nbeams = 3;
-blk_dist = 4; %Number of cells closest to the transducer to be removed
+blk_dist = 3; %Number of cells closest to the transducer to be removed
 aqdp = rmfield(aqdp,{'v3','v1'}); 
 %Let's load velocity data into the GPU to speed up computing
 %aqdp.v1 = gpuArray(aqdp.v1(:,blk_dist+1:end)); 
@@ -39,7 +39,7 @@ distances = distances(blk_dist+1:end);
 %Below we define the number of profiles over which the products between 
 %velocity differences are going to be averaged when computing structure
 %functions. These sets of profiles are called ensembles. 
-ens_length = 15; 
+ens_length = 14; 
 
 %The following array will tell us where all ensembles begin and will also
 %begin to define indexing for structure function and dissipation data
@@ -53,8 +53,9 @@ diss_time = aqdp.yday(starts);
 diss_depth = aqdp.p(starts); %Lower bound of profile
 
 %Set start and end date as day number for computation:
-start_dt = 34.035;
-end_dt = 39.55;
+start_dt = 34.635;
+end_dt = 36.05;
+
 [c start_dt] = min(abs(diss_time-start_dt));
 [c end_dt] = min(abs(diss_time - end_dt)); 
 
@@ -67,7 +68,7 @@ starts = starts(start_dt: end_dt);
 %n_profiles = 1e5; %number of dissipation estimates
 n_profiles = length(starts)
 
-r_min = 2; r_max = 23;
+r_min = 4; r_max = 27;
 
 %Making sure everything will work correctly:
 if ge(r_min, r_max)
@@ -116,34 +117,36 @@ end
 %------------------------------------------------- SPECTRAL METHOD
 
 bindistance = 0.022;
-Corrz = NaN(n_profiles, r_max-r_min +1);
-meanvs = NaN(n_profiles,1); 
 
-%Compute correlation functions for all profiles at times starts and of
-%length ens_length:
+window_length = 35; %number of bins taken for spectral estimation
+
+Spectra = NaN(n_profiles, floor(size(vstar,2)/2)); %Array to save spectra
+
+%Compute correlation functions for all profiles at all times in an ensemble
+%and average the spectra for all those moments. 
 tic
 for time = 1:n_profiles
-    [Corrz(time,:), meanvs(time)] = AQHR_correlation(vstar(starts(time): ... 
-        starts(time)+ ens_length-1,:), r_min, r_max, 0);
+    Spectra(time,:) = AQHR_correlation(vstar(starts(time):starts(time)+ ...
+        ens_length-1,:),r_min,r_max, 0,window_length, 0.4,bindistance);
+    %AQHR_correlation computes the average PSD of correlation functions in
+    %an ensemble given by the range of vstar.
 end
 toc
 
-
-radius = ((r_min:r_max)*bindistance);
 dissipation = NaN(n_profiles, 1); 
-espectros = NaN(n_profiles, 9); 
-%Now compute the power spectra of all those correlation functions
+S = dissipation;
+%wavenums = (((2*pi)./(bindistance*(r_min:r_min+floor(window_length/2)-1)))).^(-5/3);
+wavenums = ((2*pi)./(bindistance*(r_min:r_min+floor(size(vstar,2)/2)-1))).^(-5/3);
+
 tic
 for correlation = 1:n_profiles
-    spectrum = obmPSpec(Corrz(correlation,:), bindistance, 19, 0.5);
-    spectrum = spectrum.psd*(meanvs(correlation)/sum(spectrum.psd)); 
-    espectros(correlation,:) = spectrum;
-    fit = robustfit(log10(0.022*(1:length(spectrum))/(2*pi)).^(-5/3), ...
-        spectrum, 'ols'); 
-    dissipation(correlation) = fit(2);
+    fit = robustfit(wavenums(3:end-1), Spectra(correlation,3:end-1), 'ols');  
+    S(correlation) = fit(2);
+    %Negative slopes will give us imaginary dissipations, so we'll get rid
+    %of those next
 end
 toc
 
-dissipation = (dissipation*(55/18)*(9*0.4/8)^(2/3)).^3/2;
-
+%dissipation(dissipation < 0) = NaN; 
+dissipation = (9*0.4/8).*((55/18)*abs(S)).^1.5;
 
