@@ -126,27 +126,29 @@ Spectra = NaN(n_profiles, floor(size(vstar,2)/2)); %Array to save spectra
 %and average the spectra for all those moments. 
 tic
 for time = 1:n_profiles
+    time
     Spectra(time,:) = AQHR_correlation(vstar(starts(time):starts(time)+ ...
         ens_length-1,:),r_min,r_max, 0,window_length, 0.4,bindistance);
+    
     %AQHR_correlation computes the average PSD of correlation functions in
     %an ensemble given by the range of vstar.
 end
 toc
 
 dissipation = NaN(n_profiles, 1); 
-S = dissipation;
+S = NaN(n_profiles, 2);
 %wavenums = (((2*pi)./(bindistance*(r_min:r_min+floor(window_length/2)-1)))).^(-5/3);
-wavenums = ((2*pi)./(bindistance*(r_min:r_min+floor(size(vstar,2)/2)-1))).^(-5/3);
+wavenums = (1./(bindistance*(r_min:r_min+floor(size(vstar,2)/2)-1))).^(-5/3);
 
 tic
 for correlation = 1:n_profiles
-    fit = robustfit(wavenums(3:end-1), Spectra(correlation,3:end-1), 'ols');  
-    S(correlation) = fit(2);
+    S(correlation,:) = robustfit(wavenums(3:end-1), fliplr(Spectra(correlation,3:end-1)), 'ols');  
+   
     %Negative slopes will give us imaginary dissipations, so we'll get rid
     %of those next
 end
 toc
 
 %dissipation(dissipation < 0) = NaN; 
-dissipation = (9*0.4/8).*((55/18)*abs(S)).^1.5;
+dissipation = (9*0.4/8).*((55/18)*abs(S(:,2))).^1.5;
 

@@ -26,12 +26,12 @@ function [spectra] = AQHR_correlation(vstar, r_min, r_max, ...
         vstar = vstar - nanmean(vstar,2); 
     end
     
-    vmean = mean(vstar.^2,2); 
+    %vmean = mean(vstar.^2,2); 
     
     %Create an array to store the correlation function
     Rcorr = zeros(size(vstar,1),r_max - r_min +1); 
-    %spectra = zeros(size(vstar,1), floor(win_length/2)); 
-    spectra = zeros(size(vstar,1), floor(size(vstar,2)/2));
+    spectra = zeros(size(vstar,1), floor(size(vstar,2)/2)); 
+    %spectra = zeros(size(vstar,1), ceil((r_max - r_min)/2));
     
     for r = r_min:r_max
         
@@ -51,10 +51,13 @@ function [spectra] = AQHR_correlation(vstar, r_min, r_max, ...
     %Compute psd for each correlation function in time
         %one_psd = obmPSpec(Rcorr(t,:), bindistance, win_length, overlap);
         one_psd = abs(fft(Rcorr(t,:)));
+ 
         spectra(t,:) = one_psd(1:floor(size(vstar,2)/2));
     
     end
     
-    spectra = spectra.*(vmean./sum(spectra,2));
+    %spectra = spectra.*(vmean./sum(spectra,2));
+    spectra = spectra./ceil((r_max - r_min));
     spectra = mean(spectra,1);
+    
 end
