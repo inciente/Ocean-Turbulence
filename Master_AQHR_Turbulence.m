@@ -1,3 +1,4 @@
+%% LOAD FILES
 clc
 clear all
 
@@ -31,7 +32,7 @@ aqdp = rmfield(aqdp,{'v3','v1'});
 vstar = aqdp.v2(:,blk_dist+1:end);
 aqdp = rmfield(aqdp, {'v2'});
 
-%------------------------------------------------ COMMENTING SECTION
+%% REDUCE MEMORY LOAD
 
 distances = (0:33)*0.022 + 0.167; %Distance between bins and transducer
 distances = distances(blk_dist+1:end); 
@@ -39,7 +40,7 @@ distances = distances(blk_dist+1:end);
 %Below we define the number of profiles over which the products between 
 %velocity differences are going to be averaged when computing structure
 %functions. These sets of profiles are called ensembles. 
-ens_length = 14; 
+ens_length = 15; 
 
 %The following array will tell us where all ensembles begin and will also
 %begin to define indexing for structure function and dissipation data
@@ -53,8 +54,9 @@ diss_time = aqdp.yday(starts);
 diss_depth = aqdp.p(starts); %Lower bound of profile
 
 %Set start and end date as day number for computation:
-start_dt = 34.635;
-end_dt = 36.05;
+start_dt = 32.75;
+end_dt = 32.7581;
+%end_dt = 34.75;
 
 [c start_dt] = min(abs(diss_time-start_dt));
 [c end_dt] = min(abs(diss_time - end_dt)); 
@@ -68,7 +70,7 @@ starts = starts(start_dt: end_dt);
 %n_profiles = 1e5; %number of dissipation estimates
 n_profiles = length(starts)
 
-r_min = 4; r_max = 27;
+r_min = 1; r_max = 30;
 
 %Making sure everything will work correctly:
 if ge(r_min, r_max)
@@ -77,58 +79,52 @@ elseif r_max > size(vstar, 2)- r_min
     warning('r_max is greater than what may be computed by your selection of r_min and the size of your velocity matrix');
 end
 
-%---------------------------------------------- STRUCTURE FUNCTION
+%% STRUCTURE FUNCTION ESTIMATION
 
-% Deez = NaN(n_profiles,r_max - r_min + 1); 
-% 
-% tic
-% %parpool(2)
-% %Matrices = NaN(12, r_max - r_min + 1,n_profiles);
-% 
-% for time = 1:n_profiles
-%     [Deez(time,:)] = AQHR_StructureFunction(vstar(starts(time): ...
-%         starts(time)+ens_length-1,:), r_min, r_max); 
-%     %Deez(time,:) = AQHR_StructureFunction(aqdp.v2(starts(time): ...
-%     %    starts(time)+ens_length-1,:))
-%     %time
-% end
-% toc
-% 
-% k = 'done'
-% dissipation = NaN(n_profiles,1);
-% noise = NaN(n_profiles,1); 
-% %sigma = NaN(n_profiles,1);
-% %n_profiles = length(Deez);
-% tic
-% radius = ((r_min:r_max)*0.022);
-% 
-% for structures = 1:n_profiles
-%     %[fit, stats] = robustfit(radius, Deez(structures,:));
-%     fit = robustfit(radius.^(2/3), Deez(structures,:),'ols'); 
-%     %fit = regress(Deez(structures,:), [ones(size(radius)), radius.^(2/3)]);
-%     dissipation(structures) = (abs(fit(2))/2.1)^(3/2);
-%     noise(structures) = fit(1); 
-%     %sigma(structures) = stats.s;
-%     %structures
-% end
-% 
-% toc
+Deez = NaN(n_profiles,r_max - r_min + 1); 
 
+tic
+
+for time = 1:n_profiles
+    Deez(time,:) = AQHR_StructureFunction(vstar(starts(time): ...
+        starts(time)+ens_length-1,:), r_min, r_max, size(vstar,2), 0.4,); 
+end
+toc
+
+k = 'done'
+dissipation = NaN(n_profiles,1);
+noise = NaN(n_profiles,1); 
+tic
+radius = ((r_min:r_max)*0.022);
+
+for structures = 1:n_profiles
+    %[fit, stats] = robustfit(radius, Deez(structures,:));
+    fit = robustfit(radius.^(2/3), Deez(structures,:),'ols'); 
+    %fit = regress(Deez(structures,:), [ones(size(radius)), radius.^(2/3)]);
+    dissipation(structures) = (abs(fit(2))/2.1)^(3/2);
+    noise(structures) = fit(1); 
+    %sigma(structures) = stats.s;
+    %structures
+end
+
+toc
+%%
 %------------------------------------------------- SPECTRAL METHOD
 
 bindistance = 0.022;
 
-window_length = 35; %number of bins taken for spectral estimation
+window_length = 19; %number of bins taken for spectral estimation
 
-Spectra = NaN(n_profiles, floor(size(vstar,2)/2)); %Array to save spectra
+%Spectra = NaN(n_profiles, floor((r_max - r_min +1)/2-1)); %Array to save spectra
+Spectra = NaN(n_profiles, floor(window_length/2));
 
 %Compute correlation functions for all profiles at all times in an ensemble
 %and average the spectra for all those moments. 
 tic
 for time = 1:n_profiles
-    time
+    %time
     Spectra(time,:) = AQHR_correlation(vstar(starts(time):starts(time)+ ...
-        ens_length-1,:),r_min,r_max, 0,window_length, 0.4,bindistance);
+        ens_length-1,:),r_min,r_max, 1,window_length, 0.4,bindistance);
     
     %AQHR_correlation computes the average PSD of correlation functions in
     %an ensemble given by the range of vstar.
@@ -138,11 +134,17 @@ toc
 dissipation = NaN(n_profiles, 1); 
 S = NaN(n_profiles, 2);
 %wavenums = (((2*pi)./(bindistance*(r_min:r_min+floor(window_length/2)-1)))).^(-5/3);
-wavenums = (1./(bindistance*(r_min:r_min+floor(size(vstar,2)/2)-1))).^(-5/3);
+%wavenums = (1./(bindistance*(r_min:r_max))).^(-5/3);
+wavenums = ((1:size(Spectra,2))/(window_length*bindistance));
+wavefit = wavenums.^(-5/3);
 
 tic
+%We have to do the fit only for a smaller portion of the data, so we pick
+%where to make the cut: 
+cut_low = 6; cut_hi = 14;
+
 for correlation = 1:n_profiles
-    S(correlation,:) = robustfit(wavenums(3:end-1), fliplr(Spectra(correlation,3:end-1)), 'ols');  
+    S(correlation,:) = robustfit(wavefit, Spectra(correlation,:), 'ols');  
    
     %Negative slopes will give us imaginary dissipations, so we'll get rid
     %of those next

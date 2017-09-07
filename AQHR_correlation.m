@@ -29,34 +29,34 @@ function [spectra] = AQHR_correlation(vstar, r_min, r_max, ...
     %vmean = mean(vstar.^2,2); 
     
     %Create an array to store the correlation function
-    Rcorr = zeros(size(vstar,1),r_max - r_min +1); 
-    spectra = zeros(size(vstar,1), floor(size(vstar,2)/2)); 
-    %spectra = zeros(size(vstar,1), ceil((r_max - r_min)/2));
+    %Rcorr = zeros(size(vstar,1),r_max - r_min +1); 
+    %spectra = zeros(size(vstar,1), floor((r_max - r_min +1)/2)-1); 
+    spectra = zeros(size(vstar,1), floor(win_length/2));
     
-    for r = r_min:r_max
-        
-        %How many measurements of this r's correlation will we get to
-        %average?
-        cases = size(vstar,2) - r;
-        
-        for k=1:cases
-            Rcorr(:,r - r_min + 1) = Rcorr(:,r-r_min+1) + vstar(:,k).*vstar(:,k+r);
-        end
-        Rcorr(:,r - r_min + 1) = Rcorr(:,r-r_min+1)/cases;
-        %With this, correlation functions have been computed at all times.
-    end
+    %Compute the value of the correlation function at all distances r
+%     for r = r_min:r_max
+%         
+%         %How many measurements of this r's correlation will we get to
+%         %average?
+%         cases = size(vstar,2) - r;
+%         
+%         for k=1:cases
+%             Rcorr(:,r - r_min + 1) = Rcorr(:,r-r_min+1) + vstar(:,k).*vstar(:,k+r);
+%         end
+%         Rcorr(:,r - r_min + 1) = Rcorr(:,r-r_min+1)/cases;
+%         %With this, correlation functions have been computed at all times.
+%     end
    
     
     for t = 1:size(vstar,1)
     %Compute psd for each correlation function in time
-        %one_psd = obmPSpec(Rcorr(t,:), bindistance, win_length, overlap);
-        one_psd = abs(fft(Rcorr(t,:)));
- 
-        spectra(t,:) = one_psd(1:floor(size(vstar,2)/2));
+        %one_psd = obmPSpec(vstar(t,r_min:r_max), bindistance, win_length, overlap);
+        one_psd = abs(fft(vstar(t,r_min:r_max))).^2;
+        %spectra(t,:) = one_psd.psd;
+        spectra(t,:) = one_psd(2:size(spectra,2)+1);
     
     end
     
-    %spectra = spectra.*(vmean./sum(spectra,2));
     spectra = spectra./ceil((r_max - r_min));
     spectra = mean(spectra,1);
     
