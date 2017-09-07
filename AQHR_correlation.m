@@ -1,21 +1,31 @@
+<<<<<<< HEAD
 function [spectra] = AQHR_correlation(vstar, r_min, r_max, ...
     meanremoval, win_length, overlap, bindistance)
+=======
+function [Rcorr, vmean] = AQHR_correlation(vstar, r_min, r_max, meanremoval)
+>>>>>>> f7e5b6d384b3025f8909a6a2f5aaf5d1b1418ed0
     
     %Compute the spatial correlation function of doppler current profiles, 
     %and the mean squared velocity of an ensemble to normalize power
     %spectra following Veron & Melville (1999)
     
+<<<<<<< HEAD
     %Then find the average power density spectrum from all profiles in the
     %ensemble.
     
+=======
+>>>>>>> f7e5b6d384b3025f8909a6a2f5aaf5d1b1418ed0
     %Input fields are:
     %vstar - matrix of along-beam velocities with dimensions (time, bins)
     %r_min - the minimum value of r for which Rcorr shall be computed
     %r_max - maximum value of r for which Rcorr shall be computed
     %meanremoval - boolean to tell whether the temporal mean velocity
     %should be removed from each bin's data.
+<<<<<<< HEAD
     %win_length - window length to apply the Welch spectral method
     %overlap - overlap of windows in Welch's method
+=======
+>>>>>>> f7e5b6d384b3025f8909a6a2f5aaf5d1b1418ed0
     
     %Do you want to remove the temporal mean velocity from each bin?
     %McLane-mounted aquadopps are bound to produce high self correlation if
@@ -26,6 +36,7 @@ function [spectra] = AQHR_correlation(vstar, r_min, r_max, ...
         vstar = vstar - nanmean(vstar,2); 
     end
     
+<<<<<<< HEAD
     %vmean = mean(vstar.^2,2); 
     
     %Create an array to store the correlation function
@@ -59,5 +70,24 @@ function [spectra] = AQHR_correlation(vstar, r_min, r_max, ...
     
     spectra = spectra./ceil((r_max - r_min));
     spectra = mean(spectra,1);
+=======
+    vmean = mean(mean(vstar.^2));
+    
+    %Create an array to store the correlation function
+    Rcorr = zeros(size(vstar,1),r_max - r_min +1); 
+    
+    for r = r_min:r_max
+        
+        %How many measurements of this r's correlation will we get to
+        %average?
+        cases = size(vstar,2) - r;
+        
+        for k=1:cases
+            Rcorr(:,r - r_min + 1) = Rcorr(:,r-r_min+1) + vstar(:,k).*vstar(:,k+r);
+        end
+            Rcorr(:,r - r_min + 1) = Rcorr(:,r-r_min+1)/cases;
+    end
+    Rcorr = mean(Rcorr,1); 
+>>>>>>> f7e5b6d384b3025f8909a6a2f5aaf5d1b1418ed0
     
 end
