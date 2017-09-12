@@ -123,8 +123,113 @@ end
 k4 = sgolayfilt(log10(dissipation4),2,35);
 plot(diss_time,k4,'c');
 
-legend('Sreenivasan 1995','Veron & Melville','Wiles et al 2006',...
-    'Guerra & Thomson 2011');
+legend('Sreenivasan 1995','Veron & Melville 1999','Wiles et al 2006',...
+    'Guerra & Thomson 2017');
+
+%% WAVENUMBER RANGE TESTING: SPECTRA
+
+wavenums = (1:floor(size(vstar,2)/2))/(0.022*size(vstar,2));
+wavefit = wavenums.^(5/3);
+% Here we obtain spectra for a few McLane profiles (check start_dt, end_dt)
+% and test which is the best wavenumber range to use when fitting ^(-5/3) 
+% curves to data to get the least possible amount of noise.
+vstar = vstar(starts(1):starts(end)+ens_length-1,:);
+
+%vstar_TKE = vstar - mean(vstar,2); 
+%vstar_TKE = vstar - mean(vstar,1); 
+vstar_TKE = NaN(size(vstar));
+
+for k = 1:length(starts)
+    vstar_TKE((k-1)*ens_length+1:k*ens_length,:) = vstar((k-1)*ens_length+1:...
+        k*ens_length,:) - mean(vstar((k-1)*ens_length+1:k*ens_length,:));
+end
 
 
 
+%Begin by defining the range to be surveyed. 
+lo_end = 1:9;
+hi_end = 3:15;
+
+%Obtain spectra at all times before making any comparisons
+spectra = NaN(n_profiles*ens_length, 16); 
+win_length = size(vstar,2);
+
+for time=1:length(spectra)
+    
+    %Save spectra for a given moment in our new matrix
+    spec1 = obmPSpec(vstar_TKE(time,:), 0.022, win_length,0.4);
+    spec1 = spec1.psd;
+    %Compensate slope in spectra to make them flat
+    spectra(time,:) = spec1.*wavefit';
+end
+
+%Now get the epsilon estimate that would come out for each ensemble without
+%really restricting the inertial subrange wavenumbers.
+
+ref_epsilon = NaN(length(starts), 1); 
+vmean = NaN(length(starts),1); 
+
+for ensemble = 1:length(starts)
+    
+    %Find min(abs(slope)) to compute dissipation from corresponding spectrum
+    slope_list = NaN(ens_length,1); 
+    vmean(ensemble) = abs(mean(mean(vstar((ensemble-1)*ens_length+1:...
+        ensemble*ens_length,:))));
+    
+    for t_in = 1:ens_length
+      
+        index = (ensemble-1)*ens_length + t_in;
+        fit = robustfit(wavenums, spectra(index,:), 'ols');
+        slope_list(t_in) = abs(fit(2)); 
+        
+    end
+    
+    %Find min(abs(slope)) and get epsilon as written in Guerra (2017)
+    slopeind = find(slope_list == min(slope_list)); 
+    slopeind = (ensemble-1)*ens_length + slopeind;
+    ref_epsilon(ensemble) = (mean(spectra(slopeind,:))*vmean(ensemble)/...
+        (2*pi*0.69))^1.5;
+end
+
+clear slopeind slope_list fit index time ensemble t_in spec1
+
+%RMS error of each spectrum and its fit will be saved here. The horizontal
+%dimension of this matrix represents all the wavenumber pairs being tested.
+%Dimensions will be added as needed with if statement in for loop.
+RMSE_data = NaN(length(spectra),1); 
+diss_data = NaN(length(spectra),1);
+fits = NaN(length(spectra),2);
+curr_col = 1;
+
+
+%Only test when hi_end > lo_end:
+
+for lo=1:length(lo_end)
+    lo
+    for hi=1:length(hi_end)
+        hi
+        if hi_end(hi) > lo_end(lo) + 1
+            test_k = wavenums(lo_end(lo):hi_end(hi));
+            for time = 1:length(spectra)
+                fit = robustfit(test_k, spectra(time,lo_end(lo): ...
+                    hi_end(hi)), 'ols');
+                fits(time,2*curr_col-1:2*curr_col) = fit;
+                RMSE_data(time, curr_col) = mean(((fit(1) + fit(2)*test_k) - ...
+                    spectra(time,lo_end(lo): hi_end(hi))).^2);
+                diss_data(time, curr_col) = mean(spectra(time,lo_end(lo):hi_end(hi))); 
+            end
+            curr_col = curr_col+1;
+        else
+            continue
+        end
+    end
+end
+
+alt_average3 = struct('diss_data',diss_data, 'RMSE_data',RMSE_data, 'fits',fits,'spectra',spectra,'vmean',vmean,...
+    'ref_epsilon',ref_epsilon');
+%save('k_range.mat','diss_data', 'RMSE_data', 'fits','spectra','vmean',...
+%    'wavefit','wavenums','hi_end','lo_end','ref_epsilon','fits')
+save('k_range3.mat','alt_average3');
+
+
+%The End
